@@ -1,0 +1,105 @@
+/**
+ * WhatsApp-web.js Engine Plugin
+ * Built-in engine plugin that wraps the whatsapp-web.js library
+ */
+
+import { PluginContext, PluginType, IEnginePlugin } from '../../../core/plugins';
+import { IWhatsAppEngine } from '../../../engine/interfaces/whatsapp-engine.interface';
+import { WhatsAppWebJsAdapter } from '../../../engine/adapters/whatsapp-web-js.adapter';
+
+export interface WhatsAppWebJsConfig {
+  sessionDataPath?: string;
+  headless?: boolean;
+  puppeteerArgs?: string[];
+}
+
+export class WhatsAppWebJsPlugin implements IEnginePlugin {
+  type = PluginType.ENGINE as const;
+  private context?: PluginContext;
+
+  onLoad(context: PluginContext): Promise<void> {
+    this.context = context;
+    context.logger.log('WhatsApp-web.js engine plugin loaded');
+    return Promise.resolve();
+  }
+
+  onEnable(context: PluginContext): Promise<void> {
+    context.logger.log('WhatsApp-web.js engine plugin enabled');
+    return Promise.resolve();
+  }
+
+  onDisable(context: PluginContext): Promise<void> {
+    context.logger.log('WhatsApp-web.js engine plugin disabled');
+    return Promise.resolve();
+  }
+
+  // These flags are required for Chromium to run inside Docker containers.
+  // They are always included regardless of user-configured args.
+  private static readonly REQUIRED_DOCKER_FLAGS = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-accelerated-2d-canvas',
+    '--no-first-run',
+    '--no-zygote',
+    '--disable-gpu',
+    '--disable-crash-reporter',
+    '--headless',
+  ];
+
+  createEngine(config: Record<string, unknown>): IWhatsAppEngine {
+    const sessionId = config.sessionId as string;
+    const sessionDataPath = (this.context?.config.sessionDataPath as string) ?? './data/sessions';
+    const headless = (this.context?.config.headless as boolean) ?? true;
+    const configuredArgs = (this.context?.config.puppeteerArgs as string[]) ?? [];
+    // Merge: required Docker flags take precedence; user args are appended (deduped)
+    const puppeteerArgs = [
+      ...WhatsAppWebJsPlugin.REQUIRED_DOCKER_FLAGS,
+      ...configuredArgs.filter(a => !WhatsAppWebJsPlugin.REQUIRED_DOCKER_FLAGS.includes(a)),
+    ];
+
+    const proxyUrl = config.proxyUrl as string | undefined;
+    const proxyType = config.proxyType as 'http' | 'https' | 'socks4' | 'socks5' | undefined;
+
+    return new WhatsAppWebJsAdapter({
+      sessionId,
+      sessionDataPath,
+      puppeteer: {
+        headless,
+        args: puppeteerArgs,
+      },
+      proxy: proxyUrl
+        ? {
+            url: proxyUrl,
+            type: proxyType ?? 'http',
+          }
+        : undefined,
+    });
+  }
+
+  getFeatures(): string[] {
+    return [
+      'text-messages',
+      'media-messages',
+      'location-messages',
+      'contact-messages',
+      'group-management',
+      'message-reactions',
+      'message-replies',
+      'message-forwarding',
+      'message-deletion',
+      'read-receipts',
+      'typing-indicator',
+      'labels',
+      'channels',
+      'status-updates',
+      'catalog',
+    ];
+  }
+
+  healthCheck(): Promise<{ healthy: boolean; message?: string }> {
+    return Promise.resolve({ healthy: true, message: 'WhatsApp-web.js engine is available' });
+  }
+}
+
+export default WhatsAppWebJsPlugin;

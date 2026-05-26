@@ -1,0 +1,16 @@
+# Traefik Static Configuration
+# SSL es manejado por Caddy — Traefik solo enruta tráfico HTTP interno
+api:
+  dashboard: false
+
+entryPoints:
+  web:
+    address: ':80'
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+log:
+  level: INFO

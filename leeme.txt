@@ -1,0 +1,127 @@
+GUIA PARA PROBAR OPENWA CON POSTMAN EN LOCAL
+=============================================
+
+PASO 1 - Levantar el entorno local
+-----------------------------------
+La forma mas rapida es con Docker en modo desarrollo (SQLite, sin configuracion extra):
+
+    docker compose -f docker-compose.dev.yml up -d
+
+Esto levanta:
+  - API:       http://localhost:2785
+  - Dashboard: http://localhost:2886
+
+
+PASO 2 - Obtener tu API Key
+----------------------------
+Como esta en NODE_ENV=development, la clave por defecto es fija:
+
+    dev-admin-key
+
+Confirmala en los logs:
+
+    docker logs openwa-api | grep -A 2 "API Key"
+
+
+PASO 3 - Configurar Postman
+-----------------------------
+Crea un Environment en Postman con estas variables:
+
+  Variable      | Value
+  --------------|---------------------------
+  base_url      | http://localhost:2785/api
+  api_key       | dev-admin-key
+  session_id    | (lo llenas despues)
+
+Agrega el header global en tu Collection:
+
+    X-API-Key: {{api_key}}
+
+
+PASO 4 - Flujo de prueba en orden
+-----------------------------------
+
+1. Verificar que la API esta viva
+   GET {{base_url}}/health
+
+2. Crear una sesion de WhatsApp
+   POST {{base_url}}/sessions
+   Body: { "name": "mi-sesion" }
+   (Guarda el "id" que te devuelve como session_id)
+
+3. Iniciar la sesion y obtener el QR
+   POST {{base_url}}/sessions/{{session_id}}/start
+   GET  {{base_url}}/sessions/{{session_id}}/qr
+   (Escanea el QR con tu WhatsApp)
+
+4. Enviar un mensaje de prueba
+   POST {{base_url}}/sessions/{{session_id}}/messages/send-text
+   Body:
+   {
+     "chatId": "521234567890@c.us",
+     "text": "Hola desde OpenWA!"
+   }
+
+   Nota: El chatId es el numero completo con codigo de pais sin "+",
+         seguido de @c.us
+
+
+PASO 5 - Swagger como referencia
+----------------------------------
+Mientras pruebas en Postman, ten abierto el Swagger para ver todos
+los endpoints disponibles:
+
+    http://localhost:2785/api/docs
+
+Desde ahi puedes ver los body requeridos por cada endpoint sin
+tener que adivinar.
+
+
+NOTA SOBRE API KEYS EN PRODUCCION
+-----------------------------------
+Si corres con NODE_ENV=production, la clave se genera aleatoriamente
+al primer arranque con el formato:
+
+    owa_k1_<64 caracteres hex>
+
+Para recuperarla:
+  - Logs:    docker logs openwa-api | grep -A 2 "API Key"
+  - Archivo: docker exec openwa-api cat /app/data/.api-key
+
+
+lista las sesiones activas 
+curl -H "X-API-Key: owa_k1_17b5a5dec0829aa722f05381a13207cafd3fc3407faa8f8b0980b98843099770" \
+    http://localhost:2785/api/sessions
+
+
+
+
+Si usas la configuración mínima (solo API + SQLite):
+  docker compose build openwa-api
+  docker compose up -d
+  
+  Si usas el perfil completo (con dashboard + proxy Traefik):
+  docker compose build openwa-api dashboard
+  docker compose --profile full up -d
+  
+  Si usas PostgreSQL + Redis:
+  docker compose build openwa-api
+  docker compose --profile postgres --profile redis up -d
+
+  ---
+  El orden importante es:
+  1. build — reconstruye la imagen con los cambios del Dockerfile (nuevo gosu, entrypoint script)
+  2. up -d — levanta los contenedores en background, incluyendo el nuevo docker-proxy
+
+  El docker-proxy se levanta automáticamente (no tiene perfil) y openwa-api depende de él, así que Docker Compose
+  los ordena correctamente.
+
+  Para verificar que todo quedó bien después de levantar:
+  # Ver que los contenedores están corriendo
+  docker compose ps
+
+  # Confirmar que la app corre como usuario 'openwa' (no root)
+  docker exec openwa-api whoami
+
+  # Ver los logs del arranque
+  docker compose logs openwa-api --tail=30

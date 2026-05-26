@@ -1,0 +1,37 @@
+# Traefik Dynamic Configuration
+http:
+  routers:
+    # API Router
+    api:
+      rule: 'PathPrefix(`/api/`)'
+      entryPoints:
+        - web
+      service: api
+      priority: 100
+
+    # WebSocket Router
+    websocket:
+      rule: 'PathPrefix(`/socket.io`)'
+      entryPoints:
+        - web
+      service: api
+      priority: 100
+
+    # Dashboard Router
+    dashboard:
+      rule: 'PathPrefix(`/`)'
+      entryPoints:
+        - web
+      service: dashboard
+      priority: 1
+
+  services:
+    api:
+      loadBalancer:
+        servers:
+          - url: 'http://openwa-api:2785'
+
+    dashboard:
+      loadBalancer:
+        servers:
+          - url: 'http://openwa-dashboard:80'
