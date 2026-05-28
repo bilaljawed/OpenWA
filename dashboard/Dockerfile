@@ -20,8 +20,8 @@ FROM nginx:alpine
 # Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx config as a template so ${API_URL} is substituted from the env at startup
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 EXPOSE 80
 
